@@ -1203,7 +1203,21 @@ std::optional<common::CUDADataAttr> GetCUDADataAttr(const Symbol *symbol) {
     const Fortran::semantics::DerivedTypeSpec *derived{
         type ? type->AsDerived() : nullptr};
     if (derived) {
-      if (FindCUDADeviceAllocatableUltimateComponent(*derived)) {
+      if (auto comp{FindCUDADeviceAllocatableUltimateComponent(*derived)};
+          comp) {
+        const auto *compDetails{comp->detailsIf<ObjectEntityDetails>()};
+        if (details->cudaDataAttr() && compDetails &&
+            compDetails->cudaDataAttrIsImplicit()) {
+          // The component's attribute was applied by the compiler, not asked
+          // for by the user, so the memory space the user did ask for on the
+          // object takes precedence over it.
+          //
+          // An explicitly attributed  component keeps the existing behavior
+          // below: the object is placed in managed memory so that the
+          // component's descriptors stay addressable.
+          return details->cudaDataAttr();
+        }
+
         return common::CUDADataAttr::Managed;
       }
     }
