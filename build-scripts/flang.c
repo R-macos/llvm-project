@@ -60,6 +60,9 @@ static int file_exists(const char *fn) {
 int main(int argc, char **argv) {
     int i = 1, j = 1, archs = 0;
     const char *arch = 0, *sdk;
+    char **nargv = (char**) malloc(sizeof(char*) * (argc + 3));
+    if (!nargv) return 1;
+    int opts = 1;
     while (i < argc) {
 	if (!strcmp(argv[i], "-arch")) {
 	    if (i + 1 < argc) {
@@ -84,8 +87,23 @@ int main(int argc, char **argv) {
 	    strcpy(x, "-mmacosx-version-");
 	    strcpy(x + 17, argv[i] + 16);
 	    argv[i] = x;
+	} else if (!strcmp(argv[i], "-fintrinsic-modules-path"))
+	    opts = 0; /* if it is there, we don't override it */
+	/* we insert -fintrinsic-modules-path after frist non-option */
+	/* Note that if there is no non-option then there is nothing to compile so we don't care */
+	if (opts && argv[i][0] != '-') {
+	    if (!arch) /* we shold be done with -arch by now */
+		arch = myarch;
+	    nargv[j++] = "-fintrinsic-modules-path";
+	    snprintf(fn, sizeof(fn), "%s/lib/clang/23/finclude/flang/%s-%s",
+		     PREFIX, arch, BUILD);
+	    nargv[j++] = strdup(fn);
+	    /* we need arm64 above, but tools use aarch64 */
+	    if (!strcmp(arch, "arm64"))
+		arch = "aarch64";
+	    opts = 0;
 	}
-	if (j < i) argv[j] = argv[i];
+	nargv[j] = argv[i];
 	j++;
 	i++;
     }
@@ -134,9 +152,9 @@ int main(int argc, char **argv) {
 #else
     snprintf(fn, sizeof(fn), "%s-%s-%s", arch, BUILD, EXENAME);
 #endif
-    argv[0] = fn;
-    argv[argc] = 0;
-    execvp(fn, argv);
+    nargv[0] = fn;
+    nargv[argc] = 0;
+    execvp(fn, nargv);
     fprintf(stderr, "ERROR: cannot execute %s\n", fn);
     return 1;
 }
